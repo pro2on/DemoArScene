@@ -22,6 +22,8 @@ import com.google.ar.core.Config
 import com.google.ar.core.Frame
 import com.google.ar.core.Pose
 import com.google.ar.core.TrackingFailureReason
+import dev.romainguy.kotlin.math.Float3
+import dev.romainguy.kotlin.math.Quaternion
 import io.github.sceneview.ar.ARScene
 import io.github.sceneview.ar.node.AnchorNode
 import io.github.sceneview.ar.rememberARCameraNode
@@ -38,6 +40,7 @@ import io.github.sceneview.rememberMaterialLoader
 import io.github.sceneview.rememberModelLoader
 import io.github.sceneview.rememberNodes
 import io.github.sceneview.rememberView
+import kotlin.math.atan2
 import kotlin.math.cos
 import kotlin.math.sqrt
 
@@ -69,6 +72,9 @@ fun ArNavigationScreen() {
     }
 
     var anchorAdded by remember { mutableStateOf(false) }
+
+    var assetLatitude by remember { mutableStateOf(0.0) }
+    var assetLongitude by remember { mutableStateOf(0.0) }
 
 
     var frame: Frame? by remember { mutableStateOf<Frame?>(null) }
@@ -118,21 +124,21 @@ fun ArNavigationScreen() {
                         
                         // Compute horizontal direction vector from modelNode to assetNode
                         if (assetNode != null) {
-//                            val assetPos = assetNode.worldPosition
-//                            val modelPos = modelNode.worldPosition
-//                            val dx = modelPos.x - assetPos.x
-//                            val dz = modelPos.z - assetPos.z
-//
-//                            // Calculate the yaw angle (rotation around the Y axis) using atan2
-//                            val angle = atan2(dx, dz)
-//
-//                            // Convert angle from radians to degrees
-//                            val angleDegrees = Math.toDegrees(angle.toDouble()).toFloat()
-//
-//                            // Create a new quaternion representing a rotation around the Y axis only
-//                            modelNode.worldQuaternion = Quaternion.fromAxisAngle(Float3(0f, 1f, 0f), angleDegrees)
+                            val assetPos = assetNode.worldPosition
+                            val modelPos = modelNode.worldPosition
+                            val dx = modelPos.x - assetPos.x
+                            val dz = modelPos.z - assetPos.z
 
-                            modelNode.lookAt(assetNode, Direction(0.0f, 1.0f, 0.0f), false, 1.0f)
+                            // Calculate the yaw angle (rotation around the Y axis) using atan2
+                            val angle = atan2(dx, dz)
+
+                            // Convert angle from radians to degrees
+                            val angleDegrees = Math.toDegrees(angle.toDouble()).toFloat()
+
+                            // Create a new quaternion representing a rotation around the Y axis only
+                            modelNode.worldQuaternion = Quaternion.fromAxisAngle(Float3(0f, 1f, 0f), angleDegrees)
+
+//                            modelNode.lookAt(assetNode, Direction(0.0f, 1.0f, 0.0f), false, 1.0f)
                         }
                     }
                 }
@@ -161,7 +167,10 @@ fun ArNavigationScreen() {
             sb.append("Latitude: ").appendLine(earthPose.latitude)
             sb.append("Longitude: ").appendLine(earthPose.longitude)
             sb.append("Altitude: ").appendLine(earthPose.altitude)
-            sb.append("Distance: ").appendLine(flatDistance(37.745600, -25.585428, earthPose.latitude, earthPose.longitude))
+
+            if (assetLatitude != 0.0) {
+                sb.append("Distance: ").appendLine(flatDistance(assetLatitude, assetLongitude, earthPose.latitude, earthPose.longitude))
+            }
 
             debugText = sb.toString()
 
@@ -169,6 +178,10 @@ fun ArNavigationScreen() {
 
             if (shouldCreateAnchor) {
                 shouldCreateAnchor = false
+
+                assetLatitude = earthPose.latitude
+                assetLongitude = earthPose.longitude
+
                 val anchor = earth.createAnchor(
                     earthPose.latitude,
                     earthPose.longitude,
