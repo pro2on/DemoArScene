@@ -22,14 +22,9 @@ import com.google.ar.core.Config
 import com.google.ar.core.Frame
 import com.google.ar.core.Pose
 import com.google.ar.core.TrackingFailureReason
-import dev.romainguy.kotlin.math.Float3
-import dev.romainguy.kotlin.math.Quaternion
 import io.github.sceneview.ar.ARScene
-import io.github.sceneview.ar.arcore.position
-import io.github.sceneview.ar.arcore.zDirection
 import io.github.sceneview.ar.node.AnchorNode
 import io.github.sceneview.ar.rememberARCameraNode
-import io.github.sceneview.collision.Vector3
 import io.github.sceneview.loaders.MaterialLoader
 import io.github.sceneview.math.Direction
 import io.github.sceneview.math.Position
@@ -43,10 +38,6 @@ import io.github.sceneview.rememberMaterialLoader
 import io.github.sceneview.rememberModelLoader
 import io.github.sceneview.rememberNodes
 import io.github.sceneview.rememberView
-import kotlin.math.PI
-import kotlin.math.abs
-import kotlin.math.asin
-import kotlin.math.atan2
 import kotlin.math.cos
 import kotlin.math.sqrt
 
@@ -127,19 +118,21 @@ fun ArNavigationScreen() {
                         
                         // Compute horizontal direction vector from modelNode to assetNode
                         if (assetNode != null) {
-                            val assetPos = assetNode.worldPosition
-                            val modelPos = modelNode.worldPosition
-                            val dx = modelPos.x - assetPos.x
-                            val dz = modelPos.z - assetPos.z
+//                            val assetPos = assetNode.worldPosition
+//                            val modelPos = modelNode.worldPosition
+//                            val dx = modelPos.x - assetPos.x
+//                            val dz = modelPos.z - assetPos.z
+//
+//                            // Calculate the yaw angle (rotation around the Y axis) using atan2
+//                            val angle = atan2(dx, dz)
+//
+//                            // Convert angle from radians to degrees
+//                            val angleDegrees = Math.toDegrees(angle.toDouble()).toFloat()
+//
+//                            // Create a new quaternion representing a rotation around the Y axis only
+//                            modelNode.worldQuaternion = Quaternion.fromAxisAngle(Float3(0f, 1f, 0f), angleDegrees)
 
-                            // Calculate the yaw angle (rotation around the Y axis) using atan2
-                            val angle = atan2(dx, dz)
-
-                            // Convert angle from radians to degrees
-                            val angleDegrees = Math.toDegrees(angle.toDouble()).toFloat()
-
-                            // Create a new quaternion representing a rotation around the Y axis only
-                            modelNode.worldQuaternion = Quaternion.fromAxisAngle(Float3(0f, 1f, 0f), angleDegrees)
+                            modelNode.lookAt(assetNode, Direction(0.0f, 1.0f, 0.0f), false, 1.0f)
                         }
                     }
                 }
@@ -177,8 +170,8 @@ fun ArNavigationScreen() {
             if (shouldCreateAnchor) {
                 shouldCreateAnchor = false
                 val anchor = earth.createAnchor(
-                    37.745600,//earthPose.latitude,
-                    -25.585428,//earthPose.longitude,
+                    earthPose.latitude,
+                    earthPose.longitude,
                     earthPose.altitude,
                     earthPose.eastUpSouthQuaternion[0],
                     earthPose.eastUpSouthQuaternion[1],
@@ -229,10 +222,11 @@ fun createAnchorNode(
     val anchorNode = AnchorNode(engine = engine, anchor = anchor)
 
     // Define the dimensions of the cylinder.
-    val height = 1000.0f    // 1 km tall
-    val radius = 100.0f       // Adjust the radius based on visibility needs
+    val height = 20.0f    // 1 km tall
+    val radius = 1.0f       // Adjust the radius based on visibility needs
     // Offset the center so that the cylinder's base is at the anchor.
-    val center = Position(0.0f, 0.0f, 0.0f)
+    val center = Position(0f,  0.0f, 0.0f)
+    val rotation = Rotation(0.0f, 1.0f, 0.0f)
 
     // Create a semi-transparent green material.
     val materialInstance = materialLoader.createColorInstance(Color.Green)
@@ -244,10 +238,13 @@ fun createAnchorNode(
 //        center = center,
 //        materialInstance = materialInstance
 //    )
+//
+//    val verticalRotation = Quaternion.fromAxisAngle(Float3(0f, 0f, 1f), 0f)
+//    cylinderNode.worldQuaternion = verticalRotation
 
     val boxNode = CubeNode(
         engine = engine,
-        size = Size(10.0f),
+        size = Size(0.2f),
         center = center,
         materialInstance = materialInstance
     )
