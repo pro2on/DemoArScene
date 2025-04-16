@@ -19,7 +19,6 @@ import androidx.core.content.ContextCompat
 import com.google.android.filament.Engine
 import com.google.ar.core.Anchor
 import com.google.ar.core.Config
-import com.google.ar.core.Earth
 import com.google.ar.core.Frame
 import com.google.ar.core.TrackingFailureReason
 import io.github.sceneview.ar.ARScene
@@ -30,14 +29,14 @@ import io.github.sceneview.math.Position
 import io.github.sceneview.math.Size
 import io.github.sceneview.model.ModelInstance
 import io.github.sceneview.node.CubeNode
-import io.github.sceneview.node.Node
 import io.github.sceneview.rememberCollisionSystem
 import io.github.sceneview.rememberEngine
 import io.github.sceneview.rememberMaterialLoader
 import io.github.sceneview.rememberModelLoader
 import io.github.sceneview.rememberNodes
 import io.github.sceneview.rememberView
-
+import kotlin.math.cos
+import kotlin.math.sqrt
 
 @Composable
 fun ArNavigationScreen() {
@@ -68,7 +67,6 @@ fun ArNavigationScreen() {
         mutableStateOf<TrackingFailureReason?>(null)
     }
 
-
     var frame: Frame? by remember { mutableStateOf<Frame?>(null) }
     ARScene(
         modifier = Modifier.fillMaxSize(),
@@ -98,14 +96,8 @@ fun ArNavigationScreen() {
         onSessionUpdated = { session, updatedFrame ->
             frame = updatedFrame
 
-            // Display current session tracking state in the debug overlay.
-//                        val sessionTracking = session.
-
-
-
             val earth = session.earth
             if (earth == null) {
-// Check for location permissions (which are required for geospatial tracking).
                 val hasLocationPermission = ContextCompat.checkSelfPermission(
                     context,
                     Manifest.permission.ACCESS_FINE_LOCATION
@@ -127,54 +119,24 @@ fun ArNavigationScreen() {
             sb.append("Latitude: ").appendLine(earthPose.latitude)
             sb.append("Longitude: ").appendLine(earthPose.longitude)
             sb.append("Altitude: ").appendLine(earthPose.altitude)
+            sb.append("Distance: ").appendLine(flatDistance(37.745704, -25.585286, earthPose.latitude, earthPose.longitude))
 
             debugText = sb.toString()
 
             if (shouldCreateAnchor) {
                 shouldCreateAnchor = false
-
                 val anchor = earth.createAnchor(
-                    earthPose.latitude,
-                    earthPose.longitude,
+                    37.745704,//earthPose.latitude,
+                    -25.585286,//earthPose.longitude,
                     earthPose.altitude,
                     earthPose.eastUpSouthQuaternion[0],
                     earthPose.eastUpSouthQuaternion[1],
                     earthPose.eastUpSouthQuaternion[2],
                     earthPose.eastUpSouthQuaternion[3]
                 )
-
                 val node = createAnchorNode(engine, materialLoader, anchor)
                 childNodes.add(node)
             }
-
-//            val latitude = 37.741703
-//            val longitude = -25.664420
-//            val altitude = 10.0
-//
-//            val qx = 0.0f
-//            val qy = 0.0f
-//            val qz = 0.0f
-//            val qw = 1.0f
-//
-//
-//
-//            if (childNodes.isEmpty()) {
-//                val anchor = earth.createAnchor(
-//                    latitude,
-//                    longitude,
-//                    altitude,
-//                    qx,
-//                    qy,
-//                    qz,
-//                    qw
-//                )
-//                // Add a new anchor node with a 1‑km‑tall cylinder.
-//                childNodes.add(createAnchorNode(engine, materialLoader, anchor))
-//
-//                anchorCounter++
-//
-//                debugText = "Anchor created: $anchorCounter"
-//            }
         },
     )
 
@@ -224,7 +186,7 @@ fun createAnchorNode(
 
     val boxNode = CubeNode(
         engine = engine,
-        size = Size(1.0f),
+        size = Size(5.0f),
         center = center,
         materialInstance = materialInstance
     )
@@ -233,4 +195,22 @@ fun createAnchorNode(
     anchorNode.addChildNode(boxNode)
 
     return anchorNode
+}
+
+
+fun flatDistance(lat1: Double, lon1: Double, lat2: Double, lon2: Double): Double {
+    // Один градус широты примерно равен 111320 метрам
+    val metersPerDegree = 111320.0
+
+    // Разница широт в метрах
+    val dLat = (lat2 - lat1) * metersPerDegree
+
+    // Вычисляем среднюю широту и переводим в радианы
+    val avgLat = Math.toRadians((lat1 + lat2) / 2)
+
+    // Разница долгот в метрах с учетом косинуса средней широты
+    val dLon = (lon2 - lon1) * metersPerDegree * cos(avgLat)
+
+    // Расстояние по теореме Пифагора
+    return sqrt(dLat * dLat + dLon * dLon)
 }
