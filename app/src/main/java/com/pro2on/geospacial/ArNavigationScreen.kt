@@ -22,12 +22,13 @@ import com.google.ar.core.Config
 import com.google.ar.core.Frame
 import com.google.ar.core.Pose
 import com.google.ar.core.TrackingFailureReason
+import dev.romainguy.kotlin.math.Float3
+import dev.romainguy.kotlin.math.Quaternion
 import io.github.sceneview.ar.ARScene
 import io.github.sceneview.ar.arcore.position
 import io.github.sceneview.ar.arcore.zDirection
 import io.github.sceneview.ar.node.AnchorNode
 import io.github.sceneview.ar.rememberARCameraNode
-import io.github.sceneview.collision.Quaternion
 import io.github.sceneview.collision.Vector3
 import io.github.sceneview.loaders.MaterialLoader
 import io.github.sceneview.math.Direction
@@ -124,9 +125,21 @@ fun ArNavigationScreen() {
                         val newPosition = Position(modelPose.tx(), modelPose.ty(), modelPose.tz())
                         modelNode.worldPosition = newPosition
                         
-                        // Rotate this red arrow to face the anchor node
+                        // Compute horizontal direction vector from modelNode to assetNode
                         if (assetNode != null) {
-                            modelNode.lookAt(assetNode, Direction( 0.0f, 1.0f, 0.0f), false, 1.0f)
+                            val assetPos = assetNode.worldPosition
+                            val modelPos = modelNode.worldPosition
+                            val dx = modelPos.x - assetPos.x
+                            val dz = modelPos.z - assetPos.z
+
+                            // Calculate the yaw angle (rotation around the Y axis) using atan2
+                            val angle = atan2(dx, dz)
+
+                            // Convert angle from radians to degrees
+                            val angleDegrees = Math.toDegrees(angle.toDouble()).toFloat()
+
+                            // Create a new quaternion representing a rotation around the Y axis only
+                            modelNode.worldQuaternion = Quaternion.fromAxisAngle(Float3(0f, 1f, 0f), angleDegrees)
                         }
                     }
                 }
