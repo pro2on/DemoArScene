@@ -54,7 +54,6 @@ fun ArNavigationScreen() {
     val collisionSystem = rememberCollisionSystem(view)
 
     var debugText by remember { mutableStateOf("Waiting for AR session update...") }
-    var anchorCounter by remember { mutableStateOf(0) }
     var shouldCreateAnchor by remember { mutableStateOf(false) }
 
     val planeRenderer: Boolean by remember { mutableStateOf(true) }
@@ -62,7 +61,6 @@ fun ArNavigationScreen() {
     var earthState: String by remember { mutableStateOf("Sync...") }
     var earthTrackingState: String by remember { mutableStateOf("Sync...") }
 
-    val modelInstances = remember { mutableListOf<ModelInstance>() }
     var trackingFailureReason by remember {
         mutableStateOf<TrackingFailureReason?>(null)
     }
