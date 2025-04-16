@@ -30,6 +30,7 @@ import io.github.sceneview.ar.rememberARCameraNode
 import io.github.sceneview.collision.Quaternion
 import io.github.sceneview.collision.Vector3
 import io.github.sceneview.loaders.MaterialLoader
+import io.github.sceneview.math.Direction
 import io.github.sceneview.math.Position
 import io.github.sceneview.math.Rotation
 import io.github.sceneview.math.Size
@@ -41,6 +42,10 @@ import io.github.sceneview.rememberMaterialLoader
 import io.github.sceneview.rememberModelLoader
 import io.github.sceneview.rememberNodes
 import io.github.sceneview.rememberView
+import kotlin.math.PI
+import kotlin.math.abs
+import kotlin.math.asin
+import kotlin.math.atan2
 import kotlin.math.cos
 import kotlin.math.sqrt
 
@@ -71,18 +76,8 @@ fun ArNavigationScreen() {
         mutableStateOf<TrackingFailureReason?>(null)
     }
 
-    var modelPositionShouldBeSet by remember { mutableStateOf(false) }
-
     var anchorAdded by remember { mutableStateOf(false) }
 
-    // Create a fixed position node for the model
-//    val modelNode = rememberNode(engine) {
-//        ModelNode(
-//            modelInstance = modelLoader.createModelInstance("models/
-//            car_arrow.glb"),
-//            scaleToUnits = 0.25f,
-//        )
-//    }
 
     var frame: Frame? by remember { mutableStateOf<Frame?>(null) }
     ARScene(
@@ -114,41 +109,35 @@ fun ArNavigationScreen() {
             frame = updatedFrame
 
             if (childNodes.isNotEmpty()) {
-                frame?.camera?.pose?.let { cameraPose ->
+                val assetNode = childNodes.firstOrNull { it is AnchorNode } as AnchorNode?
+                val modelNode = childNodes.firstOrNull {it is ModelNode} as ModelNode?
+                if (modelNode != null) {
+                    frame?.camera?.pose?.let { cameraPose ->
 
-                    val modelNode = childNodes[0] as ModelNode
-                    // Create a pose that represents a translation of 1 meter forward (negative z-direction)
-                    val translationPose = Pose.makeTranslation(0f, 0f, -1f)
+                        // Create a pose that represents a translation of 1 meter forward (negative z-direction)
+                        val translationPose = Pose.makeTranslation(0.4f, 0.0f, -1f)
 
-                    // Compose the camera's pose with the translation to get the new model node pose
-                    val modelPose = cameraPose.compose(translationPose)
+                        // Compose the camera's pose with the translation to get the new model node pose
+                        val modelPose = cameraPose.compose(translationPose)
 
-                    // Update the node's world position using the composed pose's translation components
-                    val newPosition = Position(modelPose.tx(), modelPose.ty(), modelPose.tz())
-                    modelNode.worldPosition = newPosition
-                }
-            }
+                        // Update the node's world position using the composed pose's translation components
+                        val newPosition = Position(modelPose.tx(), modelPose.ty(), modelPose.tz())
+                        modelNode.worldPosition = newPosition
 
-            if (modelPositionShouldBeSet) {
-                modelPositionShouldBeSet = false
-                val modelNode = childNodes[0] as ModelNode
-                frame?.camera?.pose?.let { cameraPose: Pose ->
-
-                    // Retrieve the current camera pose from the frame
-
-                    // Create a pose that represents a translation of 1 meter forward (negative z-direction)
-                    val translationPose = Pose.makeTranslation(0f, 0f, -1f)
-
-                    // Compose the camera's pose with the translation to get the new model node pose
-                    val modelPose = cameraPose.compose(translationPose)
-
-                    // Update the node's world position using the composed pose's translation components
-                    val newPosition = Position(modelPose.tx(), modelPose.ty(), modelPose.tz())
-                    modelNode.worldPosition = newPosition
-
-                    // (Optional) If you want the node to also match the camera's rotation, update the node's rotation:
-//                    val newRotation = Rotation(modelPose.qx(), modelPose.qy(), modelPose.qz())
-//                    modelNode.worldRotation = newRotation
+                        // Set the model's rotation to match the camera's rotation
+                        // Convert the quaternion to Euler angles since Rotation takes Float3
+                        val eulerAngles = quaternionToEulerAngles(
+                            modelPose.qx(),
+                            modelPose.qy(),
+                            modelPose.qz(),
+                            modelPose.qw()
+                        )
+                        
+                        // Apply the Euler angles to the model's rotation
+                        if (assetNode != null) {
+                            modelNode.lookAt(assetNode, Direction( 0.0f, 1.0f, 0.0f), false, 1.0f)
+                        }
+                    }
                 }
             }
 
@@ -181,17 +170,17 @@ fun ArNavigationScreen() {
 
             if (shouldCreateAnchor) {
                 shouldCreateAnchor = false
-//                val anchor = earth.createAnchor(
-//                    37.745412,//earthPose.latitude,
-//                    -25.586058,//earthPose.longitude,
-//                    earthPose.altitude,
-//                    earthPose.eastUpSouthQuaternion[0],
-//                    earthPose.eastUpSouthQuaternion[1],
-//                    earthPose.eastUpSouthQuaternion[2],
-//                    earthPose.eastUpSouthQuaternion[3]
-//                )
-//                val node = createAnchorNode(engine, materialLoader, anchor)
-//                childNodes.add(node)
+                val anchor = earth.createAnchor(
+                    37.745412,//earthPose.latitude,
+                    -25.586058,//earthPose.longitude,
+                    earthPose.altitude,
+                    earthPose.eastUpSouthQuaternion[0],
+                    earthPose.eastUpSouthQuaternion[1],
+                    earthPose.eastUpSouthQuaternion[2],
+                    earthPose.eastUpSouthQuaternion[3]
+                )
+                val node = createAnchorNode(engine, materialLoader, anchor)
+                childNodes.add(node)
 
                 val modelNode = ModelNode(
                     modelInstance = modelLoader.createModelInstance("models/car_arrow.glb"),
@@ -213,11 +202,6 @@ fun ArNavigationScreen() {
             Spacer(modifier = Modifier.weight(1f))
             Button(onClick = { shouldCreateAnchor = true }) {
                 Text(text = "Create Anchor")
-            }
-        } else {
-            Spacer(modifier = Modifier.weight(1f))
-            Button(onClick = { modelPositionShouldBeSet = true }) {
-                Text(text = "Remove Anchor")
             }
         }
     }
@@ -257,7 +241,7 @@ fun createAnchorNode(
 
     val boxNode = CubeNode(
         engine = engine,
-        size = Size(5.0f),
+        size = Size(10.0f),
         center = center,
         materialInstance = materialInstance
     )
@@ -284,4 +268,31 @@ fun flatDistance(lat1: Double, lon1: Double, lat2: Double, lon2: Double): Double
 
     // Расстояние по теореме Пифагора
     return sqrt(dLat * dLat + dLon * dLon)
+}
+
+
+/**
+ * Converts a quaternion (qx, qy, qz, qw) into Euler angles (pitch, yaw, roll).
+ * Note: The exact order and sign of the Euler angles depend on the convention your engine uses.
+ */
+fun quaternionToEulerAngles(qx: Float, qy: Float, qz: Float, qw: Float): Vector3 {
+    // Roll (rotation around x-axis)
+    val sinr_cosp = 2 * (qw * qx + qy * qz)
+    val cosr_cosp = 1 - 2 * (qx * qx + qy * qy)
+    val roll = atan2(sinr_cosp, cosr_cosp)
+
+    // Pitch (rotation around y-axis)
+    val sinp = 2 * (qw * qy - qz * qx)
+    val pitch = if (abs(sinp) >= 1) {
+        (PI / 2).toFloat() * kotlin.math.sign(sinp) // use 90° if out of range
+    } else {
+        asin(sinp)
+    }
+
+    // Yaw (rotation around z-axis)
+    val siny_cosp = 2 * (qw * qz + qx * qy)
+    val cosy_cosp = 1 - 2 * (qy * qy + qz * qz)
+    val yaw = atan2(siny_cosp, cosy_cosp)
+
+    return Vector3(pitch, yaw, roll)
 }
