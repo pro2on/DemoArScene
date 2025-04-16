@@ -22,10 +22,12 @@ import com.google.ar.core.Config
 import com.google.ar.core.Frame
 import com.google.ar.core.Pose
 import com.google.ar.core.TrackingFailureReason
-import dev.romainguy.kotlin.math.Float3
 import io.github.sceneview.ar.ARScene
+import io.github.sceneview.ar.arcore.position
+import io.github.sceneview.ar.arcore.zDirection
 import io.github.sceneview.ar.node.AnchorNode
 import io.github.sceneview.ar.rememberARCameraNode
+import io.github.sceneview.collision.Quaternion
 import io.github.sceneview.collision.Vector3
 import io.github.sceneview.loaders.MaterialLoader
 import io.github.sceneview.math.Direction
@@ -33,7 +35,6 @@ import io.github.sceneview.math.Position
 import io.github.sceneview.math.Rotation
 import io.github.sceneview.math.Size
 import io.github.sceneview.node.CubeNode
-import io.github.sceneview.node.CylinderNode
 import io.github.sceneview.node.ModelNode
 import io.github.sceneview.rememberCollisionSystem
 import io.github.sceneview.rememberEngine
@@ -41,6 +42,10 @@ import io.github.sceneview.rememberMaterialLoader
 import io.github.sceneview.rememberModelLoader
 import io.github.sceneview.rememberNodes
 import io.github.sceneview.rememberView
+import kotlin.math.PI
+import kotlin.math.abs
+import kotlin.math.asin
+import kotlin.math.atan2
 import kotlin.math.cos
 import kotlin.math.sqrt
 
@@ -121,20 +126,7 @@ fun ArNavigationScreen() {
                         
                         // Rotate this red arrow to face the anchor node
                         if (assetNode != null) {
-                            // Get positions for direction calculation
-                            val modelPosition = modelNode.worldPosition
-                            val targetPosition = assetNode.worldPosition
-                            
-                            // Calculate only the horizontal direction to the target (ignoring Y)
-                            val direction = Vector3(
-                                targetPosition.x - modelPosition.x, 
-                                0.0f,  // Keep Y at 0 to stay parallel to the ground
-                                targetPosition.z - modelPosition.z
-                            ).normalized()
-
-
-                            // Use world up vector as the up direction to keep the model level
-                            modelNode.rotation = Rotation(direction.x, direction.y, direction.z)
+                            modelNode.lookAt(assetNode, Direction( 0.0f, 1.0f, 0.0f), false, 1.0f)
                         }
                     }
                 }
@@ -224,31 +216,31 @@ fun createAnchorNode(
     val anchorNode = AnchorNode(engine = engine, anchor = anchor)
 
     // Define the dimensions of the cylinder.
-    val height = 100.0f    // 1 km tall
-    val radius = 1.0f       // Adjust the radius based on visibility needs
+    val height = 1000.0f    // 1 km tall
+    val radius = 100.0f       // Adjust the radius based on visibility needs
     // Offset the center so that the cylinder's base is at the anchor.
     val center = Position(0.0f, 0.0f, 0.0f)
 
     // Create a semi-transparent green material.
     val materialInstance = materialLoader.createColorInstance(Color.Green)
     // Build the cylinder node.
-    val cylinderNode = CylinderNode(
-        engine = engine,
-        radius = radius,
-        height = height,
-        center = center,
-        materialInstance = materialInstance
-    )
-
-//    val boxNode = CubeNode(
+//    val cylinderNode = CylinderNode(
 //        engine = engine,
-//        size = Size(10.0f),
+//        radius = radius,
+//        height = height,
 //        center = center,
 //        materialInstance = materialInstance
 //    )
 
+    val boxNode = CubeNode(
+        engine = engine,
+        size = Size(10.0f),
+        center = center,
+        materialInstance = materialInstance
+    )
+
     // Attach the cylinder node as a child of the anchor node.
-    anchorNode.addChildNode(cylinderNode)
+    anchorNode.addChildNode(boxNode)
 
     return anchorNode
 }
