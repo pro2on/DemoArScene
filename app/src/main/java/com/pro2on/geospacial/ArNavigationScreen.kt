@@ -123,17 +123,8 @@ fun ArNavigationScreen() {
                         // Update the node's world position using the composed pose's translation components
                         val newPosition = Position(modelPose.tx(), modelPose.ty(), modelPose.tz())
                         modelNode.worldPosition = newPosition
-
-                        // Set the model's rotation to match the camera's rotation
-                        // Convert the quaternion to Euler angles since Rotation takes Float3
-                        val eulerAngles = quaternionToEulerAngles(
-                            modelPose.qx(),
-                            modelPose.qy(),
-                            modelPose.qz(),
-                            modelPose.qw()
-                        )
                         
-                        // Apply the Euler angles to the model's rotation
+                        // Rotate this red arrow to face the anchor node
                         if (assetNode != null) {
                             modelNode.lookAt(assetNode, Direction( 0.0f, 1.0f, 0.0f), false, 1.0f)
                         }
