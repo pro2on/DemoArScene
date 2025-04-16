@@ -119,15 +119,15 @@ fun ArNavigationScreen() {
             sb.append("Latitude: ").appendLine(earthPose.latitude)
             sb.append("Longitude: ").appendLine(earthPose.longitude)
             sb.append("Altitude: ").appendLine(earthPose.altitude)
-            sb.append("Distance: ").appendLine(flatDistance(37.745704, -25.585286, earthPose.latitude, earthPose.longitude))
+            sb.append("Distance: ").appendLine(flatDistance(37.745412, -25.586058, earthPose.latitude, earthPose.longitude))
 
             debugText = sb.toString()
 
             if (shouldCreateAnchor) {
                 shouldCreateAnchor = false
                 val anchor = earth.createAnchor(
-                    37.745704,//earthPose.latitude,
-                    -25.585286,//earthPose.longitude,
+                    37.745412,//earthPose.latitude,
+                    -25.586058,//earthPose.longitude,
                     earthPose.altitude,
                     earthPose.eastUpSouthQuaternion[0],
                     earthPose.eastUpSouthQuaternion[1],
