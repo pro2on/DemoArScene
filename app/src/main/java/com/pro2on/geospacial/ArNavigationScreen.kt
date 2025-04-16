@@ -262,30 +262,3 @@ fun flatDistance(lat1: Double, lon1: Double, lat2: Double, lon2: Double): Double
     // Расстояние по теореме Пифагора
     return sqrt(dLat * dLat + dLon * dLon)
 }
-
-
-/**
- * Converts a quaternion (qx, qy, qz, qw) into Euler angles (pitch, yaw, roll).
- * Note: The exact order and sign of the Euler angles depend on the convention your engine uses.
- */
-fun quaternionToEulerAngles(qx: Float, qy: Float, qz: Float, qw: Float): Vector3 {
-    // Roll (rotation around x-axis)
-    val sinr_cosp = 2 * (qw * qx + qy * qz)
-    val cosr_cosp = 1 - 2 * (qx * qx + qy * qy)
-    val roll = atan2(sinr_cosp, cosr_cosp)
-
-    // Pitch (rotation around y-axis)
-    val sinp = 2 * (qw * qy - qz * qx)
-    val pitch = if (abs(sinp) >= 1) {
-        (PI / 2).toFloat() * kotlin.math.sign(sinp) // use 90° if out of range
-    } else {
-        asin(sinp)
-    }
-
-    // Yaw (rotation around z-axis)
-    val siny_cosp = 2 * (qw * qz + qx * qy)
-    val cosy_cosp = 1 - 2 * (qy * qy + qz * qz)
-    val yaw = atan2(siny_cosp, cosy_cosp)
-
-    return Vector3(pitch, yaw, roll)
-}
