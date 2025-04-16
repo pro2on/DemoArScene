@@ -20,15 +20,21 @@ import com.google.android.filament.Engine
 import com.google.ar.core.Anchor
 import com.google.ar.core.Config
 import com.google.ar.core.Frame
+import com.google.ar.core.Pose
 import com.google.ar.core.TrackingFailureReason
 import io.github.sceneview.ar.ARScene
+import io.github.sceneview.ar.arcore.position
+import io.github.sceneview.ar.arcore.zDirection
 import io.github.sceneview.ar.node.AnchorNode
 import io.github.sceneview.ar.rememberARCameraNode
+import io.github.sceneview.collision.Quaternion
+import io.github.sceneview.collision.Vector3
 import io.github.sceneview.loaders.MaterialLoader
 import io.github.sceneview.math.Position
+import io.github.sceneview.math.Rotation
 import io.github.sceneview.math.Size
-import io.github.sceneview.model.ModelInstance
 import io.github.sceneview.node.CubeNode
+import io.github.sceneview.node.ModelNode
 import io.github.sceneview.rememberCollisionSystem
 import io.github.sceneview.rememberEngine
 import io.github.sceneview.rememberMaterialLoader
@@ -65,6 +71,19 @@ fun ArNavigationScreen() {
         mutableStateOf<TrackingFailureReason?>(null)
     }
 
+    var modelPositionShouldBeSet by remember { mutableStateOf(false) }
+
+    var anchorAdded by remember { mutableStateOf(false) }
+
+    // Create a fixed position node for the model
+//    val modelNode = rememberNode(engine) {
+//        ModelNode(
+//            modelInstance = modelLoader.createModelInstance("models/
+//            car_arrow.glb"),
+//            scaleToUnits = 0.25f,
+//        )
+//    }
+
     var frame: Frame? by remember { mutableStateOf<Frame?>(null) }
     ARScene(
         modifier = Modifier.fillMaxSize(),
@@ -93,6 +112,45 @@ fun ArNavigationScreen() {
         },
         onSessionUpdated = { session, updatedFrame ->
             frame = updatedFrame
+
+            if (childNodes.isNotEmpty()) {
+                frame?.camera?.pose?.let { cameraPose ->
+
+                    val modelNode = childNodes[0] as ModelNode
+                    // Create a pose that represents a translation of 1 meter forward (negative z-direction)
+                    val translationPose = Pose.makeTranslation(0f, 0f, -1f)
+
+                    // Compose the camera's pose with the translation to get the new model node pose
+                    val modelPose = cameraPose.compose(translationPose)
+
+                    // Update the node's world position using the composed pose's translation components
+                    val newPosition = Position(modelPose.tx(), modelPose.ty(), modelPose.tz())
+                    modelNode.worldPosition = newPosition
+                }
+            }
+
+            if (modelPositionShouldBeSet) {
+                modelPositionShouldBeSet = false
+                val modelNode = childNodes[0] as ModelNode
+                frame?.camera?.pose?.let { cameraPose: Pose ->
+
+                    // Retrieve the current camera pose from the frame
+
+                    // Create a pose that represents a translation of 1 meter forward (negative z-direction)
+                    val translationPose = Pose.makeTranslation(0f, 0f, -1f)
+
+                    // Compose the camera's pose with the translation to get the new model node pose
+                    val modelPose = cameraPose.compose(translationPose)
+
+                    // Update the node's world position using the composed pose's translation components
+                    val newPosition = Position(modelPose.tx(), modelPose.ty(), modelPose.tz())
+                    modelNode.worldPosition = newPosition
+
+                    // (Optional) If you want the node to also match the camera's rotation, update the node's rotation:
+//                    val newRotation = Rotation(modelPose.qx(), modelPose.qy(), modelPose.qz())
+//                    modelNode.worldRotation = newRotation
+                }
+            }
 
             val earth = session.earth
             if (earth == null) {
@@ -123,17 +181,25 @@ fun ArNavigationScreen() {
 
             if (shouldCreateAnchor) {
                 shouldCreateAnchor = false
-                val anchor = earth.createAnchor(
-                    37.745412,//earthPose.latitude,
-                    -25.586058,//earthPose.longitude,
-                    earthPose.altitude,
-                    earthPose.eastUpSouthQuaternion[0],
-                    earthPose.eastUpSouthQuaternion[1],
-                    earthPose.eastUpSouthQuaternion[2],
-                    earthPose.eastUpSouthQuaternion[3]
+//                val anchor = earth.createAnchor(
+//                    37.745412,//earthPose.latitude,
+//                    -25.586058,//earthPose.longitude,
+//                    earthPose.altitude,
+//                    earthPose.eastUpSouthQuaternion[0],
+//                    earthPose.eastUpSouthQuaternion[1],
+//                    earthPose.eastUpSouthQuaternion[2],
+//                    earthPose.eastUpSouthQuaternion[3]
+//                )
+//                val node = createAnchorNode(engine, materialLoader, anchor)
+//                childNodes.add(node)
+
+                val modelNode = ModelNode(
+                    modelInstance = modelLoader.createModelInstance("models/car_arrow.glb"),
+                    scaleToUnits = 0.25f,
                 )
-                val node = createAnchorNode(engine, materialLoader, anchor)
-                childNodes.add(node)
+
+                childNodes.add(modelNode)
+                anchorAdded = true
             }
         },
     )
@@ -143,9 +209,16 @@ fun ArNavigationScreen() {
         Text(text = earthState)
         Text(text = earthTrackingState)
         Text(text = debugText)
-        Spacer(modifier = Modifier.weight(1f))
-        Button(onClick = { shouldCreateAnchor = true }) {
-            Text(text = "Create Anchor")
+        if (!anchorAdded) {
+            Spacer(modifier = Modifier.weight(1f))
+            Button(onClick = { shouldCreateAnchor = true }) {
+                Text(text = "Create Anchor")
+            }
+        } else {
+            Spacer(modifier = Modifier.weight(1f))
+            Button(onClick = { modelPositionShouldBeSet = true }) {
+                Text(text = "Remove Anchor")
+            }
         }
     }
 
@@ -155,7 +228,7 @@ fun ArNavigationScreen() {
  * Creates an AnchorNode that attaches a 1‑km‑tall cylinder.
  *
  * The cylinder is built using CylinderNode with a specified radius and height.
- * To align the cylinder’s base at the anchor point, the center is offset upward by half of its height.
+ * To align the cylinder's base at the anchor point, the center is offset upward by half of its height.
  */
 fun createAnchorNode(
     engine: Engine,
