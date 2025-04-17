@@ -2,7 +2,6 @@ package com.pro2on.geospacial
 
 import android.Manifest
 import android.content.pm.PackageManager
-import android.util.Log
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
@@ -23,20 +22,13 @@ import com.google.ar.core.Config
 import com.google.ar.core.Frame
 import com.google.ar.core.Pose
 import com.google.ar.core.TrackingFailureReason
-import dev.romainguy.kotlin.math.Float3
-import dev.romainguy.kotlin.math.Quaternion
-import dev.romainguy.kotlin.math.pow
 import io.github.sceneview.ar.ARScene
 import io.github.sceneview.ar.node.AnchorNode
 import io.github.sceneview.ar.rememberARCameraNode
 import io.github.sceneview.collision.Vector3
 import io.github.sceneview.loaders.MaterialLoader
-import io.github.sceneview.math.Direction
 import io.github.sceneview.math.Position
-import io.github.sceneview.math.Rotation
-import io.github.sceneview.math.Size
 import io.github.sceneview.math.toFloat3
-import io.github.sceneview.node.CubeNode
 import io.github.sceneview.node.CylinderNode
 import io.github.sceneview.node.ModelNode
 import io.github.sceneview.rememberCollisionSystem
@@ -45,9 +37,7 @@ import io.github.sceneview.rememberMaterialLoader
 import io.github.sceneview.rememberModelLoader
 import io.github.sceneview.rememberNodes
 import io.github.sceneview.rememberView
-import kotlin.math.atan2
 import kotlin.math.cos
-import kotlin.math.sin
 import kotlin.math.sqrt
 
 @Composable
@@ -114,6 +104,18 @@ fun ArNavigationScreen() {
 
             if (childNodes.isNotEmpty()) {
                 val assetNode = childNodes.firstOrNull { it is AnchorNode } as AnchorNode?
+                if (assetNode != null) {
+                    val cylinerNode = assetNode.childNodes.firstOrNull()
+                    if (cylinerNode != null) {
+                        session.earth?.let { earth ->
+                            // I want to align the y-position for the cylinder with the earth's y-position
+                            val cameraY = cameraNode.worldPosition.y - 1.5f
+                            val currentPosition = cylinerNode.worldPosition
+                            cylinerNode.worldPosition = Position(currentPosition.x, cameraY, currentPosition.z)
+                        }
+                    }
+                }
+
                 val modelNode = childNodes.firstOrNull {it is ModelNode} as ModelNode?
                 if (modelNode != null) {
                     frame?.camera?.pose?.let { cameraPose ->
@@ -181,10 +183,10 @@ fun ArNavigationScreen() {
                     earthPose.latitude,
                     earthPose.longitude,
                     earthPose.altitude,
-                    earthPose.eastUpSouthQuaternion[0],
-                    earthPose.eastUpSouthQuaternion[1],
-                    earthPose.eastUpSouthQuaternion[2],
-                    earthPose.eastUpSouthQuaternion[3]
+                    0f,//earthPose.eastUpSouthQuaternion[0],
+                    0f,//earthPose.eastUpSouthQuaternion[1],
+                    0f,//earthPose.eastUpSouthQuaternion[2],
+                    1f//earthPose.eastUpSouthQuaternion[3]
                 )
                 val node = createAnchorNode(engine, materialLoader, anchor)
                 childNodes.add(node)
@@ -230,35 +232,35 @@ fun createAnchorNode(
     val anchorNode = AnchorNode(engine = engine, anchor = anchor)
 
     // Define the dimensions of the cylinder.
-    val height = 20.0f    // 1 km tall
-    val radius = 1.0f       // Adjust the radius based on visibility needs
+    val height = 30.0f    // 1 km tall
+    val radius = 0.25f       // Adjust the radius based on visibility needs
     // Offset the center so that the cylinder's base is at the anchor.
-    val center = Position(0f,  0.0f, 0.0f)
-    val rotation = Rotation(0.0f, 1.0f, 0.0f)
+    val center = Position(0.0f,  height/2f, 0.0f) // это поднимает на уровень земли. Типа поставили его на землю
+//    val center = Position(0.0f,  0.0f, 0.0f)
 
     // Create a semi-transparent green material.
     val materialInstance = materialLoader.createColorInstance(Color.Green)
     // Build the cylinder node.
-//    val cylinderNode = CylinderNode(
-//        engine = engine,
-//        radius = radius,
-//        height = height,
-//        center = center,
-//        materialInstance = materialInstance
-//    )
-//
-//    val verticalRotation = Quaternion.fromAxisAngle(Float3(0f, 0f, 1f), 0f)
-//    cylinderNode.worldQuaternion = verticalRotation
-
-    val boxNode = CubeNode(
+    val cylinderNode = CylinderNode(
         engine = engine,
-        size = Size(0.3f),
+        radius = radius,
+        height = height,
         center = center,
         materialInstance = materialInstance
     )
+    //cylinderNode.worldQuaternion = Quaternion(0f, 0f, 0f, 1f)
+//    val verticalRotation = Quaternion.fromAxisAngle(Float3(0f, 0f, 1f), 0f)
+//    cylinderNode.worldQuaternion = verticalRotation
+
+//    val boxNode = CubeNode(
+//        engine = engine,
+//        size = Size(0.3f),
+//        center = center,
+//        materialInstance = materialInstance
+//    )
 
     // Attach the cylinder node as a child of the anchor node.
-    anchorNode.addChildNode(boxNode)
+    anchorNode.addChildNode(cylinderNode)
 
     return anchorNode
 }
