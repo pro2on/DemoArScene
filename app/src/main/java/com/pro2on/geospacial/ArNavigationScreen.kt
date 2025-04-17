@@ -22,6 +22,7 @@ import com.google.ar.core.Config
 import com.google.ar.core.Frame
 import com.google.ar.core.Pose
 import com.google.ar.core.TrackingFailureReason
+import dev.romainguy.kotlin.math.pow
 import io.github.sceneview.ar.ARScene
 import io.github.sceneview.ar.node.AnchorNode
 import io.github.sceneview.ar.rememberARCameraNode
@@ -186,6 +187,16 @@ fun ArNavigationScreen() {
 
             if (assetLatitude != 0.0) {
                 sb.append("Distance: ").appendLine(flatDistance(assetLatitude, assetLongitude, earthPose.latitude, earthPose.longitude))
+            }
+
+            if (childNodes.isNotEmpty()) {
+                val anchorNode = childNodes.firstOrNull { it is AnchorNode } as AnchorNode?
+                val cameraPosition = cameraNode.worldPosition
+                val anchorPosition = anchorNode?.worldPosition
+                if (anchorPosition != null) {
+                    val horizontalDistanceBetweenCameraAndAnchor = sqrt(pow(cameraPosition.x - anchorPosition.x, 2.0f) + pow(cameraPosition.z - anchorPosition.z, 2.0f))
+                    sb.append("Distance to anchor: ").appendLine(horizontalDistanceBetweenCameraAndAnchor)
+                }
             }
 
             debugText = sb.toString()
