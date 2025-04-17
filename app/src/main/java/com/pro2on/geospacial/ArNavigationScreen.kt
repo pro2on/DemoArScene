@@ -117,18 +117,20 @@ fun ArNavigationScreen() {
                             (assetPosition.z - cameraPosition.z).pow(2)
                         )
 
+                        val yposition = cameraPosition.y - 1.5f
+
                         // Adjust cylinderNode position based on the distance
                         cylinderNode.worldPosition = if (horizontalDistance > 30f) {
                             // Pull cylinderNode toward the camera to be exactly 30 meters away
                             val ratio = 30f / horizontalDistance
                             Position(
                                 cameraPosition.x + (assetPosition.x - cameraPosition.x) * ratio,
-                                assetPosition.y,
+                                yposition,
                                 cameraPosition.z + (assetPosition.z - cameraPosition.z) * ratio
                             )
                         } else {
                             // Keep cylinderNode at assetNode position (without changing y-position)
-                            Position(assetPosition.x, assetPosition.y, assetPosition.z)
+                            Position(assetPosition.x, yposition, assetPosition.z)
                         }
                     }
                 }
