@@ -107,12 +107,9 @@ fun ArNavigationScreen() {
                 if (assetNode != null) {
                     val cylinderNode = assetNode.childNodes.firstOrNull()
                     if (cylinderNode != null) {
-                        session.earth?.let { earth ->
-                            // I want to align the y-position for the cylinder with the earth's y-position
-                            val cameraY = cameraNode.worldPosition.y - 1.5f
-                            val currentPosition = cylinderNode.worldPosition
-                            cylinderNode.worldPosition = Position(currentPosition.x, cameraY, currentPosition.z)
-                        }
+                        val cameraY = cameraNode.worldPosition.y - 1.5f
+                        val currentPosition = cylinderNode.worldPosition
+                        cylinderNode.worldPosition = Position(currentPosition.x, cameraY, currentPosition.z)
                     }
                 }
 
