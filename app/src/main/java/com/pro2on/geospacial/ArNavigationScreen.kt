@@ -2,6 +2,7 @@ package com.pro2on.geospacial
 
 import android.Manifest
 import android.content.pm.PackageManager
+import android.util.Log
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
@@ -24,15 +25,19 @@ import com.google.ar.core.Pose
 import com.google.ar.core.TrackingFailureReason
 import dev.romainguy.kotlin.math.Float3
 import dev.romainguy.kotlin.math.Quaternion
+import dev.romainguy.kotlin.math.pow
 import io.github.sceneview.ar.ARScene
 import io.github.sceneview.ar.node.AnchorNode
 import io.github.sceneview.ar.rememberARCameraNode
+import io.github.sceneview.collision.Vector3
 import io.github.sceneview.loaders.MaterialLoader
 import io.github.sceneview.math.Direction
 import io.github.sceneview.math.Position
 import io.github.sceneview.math.Rotation
 import io.github.sceneview.math.Size
+import io.github.sceneview.math.toFloat3
 import io.github.sceneview.node.CubeNode
+import io.github.sceneview.node.CylinderNode
 import io.github.sceneview.node.ModelNode
 import io.github.sceneview.rememberCollisionSystem
 import io.github.sceneview.rememberEngine
@@ -42,6 +47,7 @@ import io.github.sceneview.rememberNodes
 import io.github.sceneview.rememberView
 import kotlin.math.atan2
 import kotlin.math.cos
+import kotlin.math.sin
 import kotlin.math.sqrt
 
 @Composable
@@ -124,21 +130,10 @@ fun ArNavigationScreen() {
                         
                         // Compute horizontal direction vector from modelNode to assetNode
                         if (assetNode != null) {
-                            val assetPos = assetNode.worldPosition
-                            val modelPos = modelNode.worldPosition
-                            val dx = modelPos.x - assetPos.x
-                            val dz = modelPos.z - assetPos.z
-
-                            // Calculate the yaw angle (rotation around the Y axis) using atan2
-                            val angle = atan2(dx, dz)
-
-                            // Convert angle from radians to degrees
-                            val angleDegrees = Math.toDegrees(angle.toDouble()).toFloat()
-
-                            // Create a new quaternion representing a rotation around the Y axis only
-                            modelNode.worldQuaternion = Quaternion.fromAxisAngle(Float3(0f, 1f, 0f), angleDegrees)
-
-//                            modelNode.lookAt(assetNode, Direction(0.0f, 1.0f, 0.0f), false, 1.0f)
+                            val modelPosition = modelNode.worldPosition
+                            val assetPosition = assetNode.worldPosition
+                            val target = Position(assetPosition.x, modelPosition.y, assetPosition.z)
+                            modelNode.lookAt(target, Vector3.up().toFloat3(), false, 1f)
                         }
                     }
                 }
@@ -257,7 +252,7 @@ fun createAnchorNode(
 
     val boxNode = CubeNode(
         engine = engine,
-        size = Size(0.2f),
+        size = Size(0.3f),
         center = center,
         materialInstance = materialInstance
     )
