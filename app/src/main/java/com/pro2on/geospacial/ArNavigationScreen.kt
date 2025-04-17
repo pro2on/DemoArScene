@@ -39,6 +39,7 @@ import io.github.sceneview.rememberNodes
 import io.github.sceneview.rememberView
 import kotlin.math.cos
 import kotlin.math.sqrt
+import kotlin.math.pow
 
 @Composable
 fun ArNavigationScreen() {
@@ -107,9 +108,28 @@ fun ArNavigationScreen() {
                 if (assetNode != null) {
                     val cylinderNode = assetNode.childNodes.firstOrNull()
                     if (cylinderNode != null) {
-                        val cameraY = cameraNode.worldPosition.y - 1.5f
-                        val currentPosition = cylinderNode.worldPosition
-                        cylinderNode.worldPosition = Position(currentPosition.x, cameraY, currentPosition.z)
+                        val cameraPosition = cameraNode.worldPosition
+                        val assetPosition = assetNode.worldPosition
+
+                        // Calculate the horizontal distance ignoring y-axis
+                        val horizontalDistance = sqrt(
+                            (assetPosition.x - cameraPosition.x).pow(2) +
+                            (assetPosition.z - cameraPosition.z).pow(2)
+                        )
+
+                        // Adjust cylinderNode position based on the distance
+                        cylinderNode.worldPosition = if (horizontalDistance > 30f) {
+                            // Pull cylinderNode toward the camera to be exactly 30 meters away
+                            val ratio = 30f / horizontalDistance
+                            Position(
+                                cameraPosition.x + (assetPosition.x - cameraPosition.x) * ratio,
+                                assetPosition.y,
+                                cameraPosition.z + (assetPosition.z - cameraPosition.z) * ratio
+                            )
+                        } else {
+                            // Keep cylinderNode at assetNode position (without changing y-position)
+                            Position(assetPosition.x, assetPosition.y, assetPosition.z)
+                        }
                     }
                 }
 
