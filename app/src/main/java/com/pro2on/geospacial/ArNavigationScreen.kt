@@ -108,14 +108,12 @@ fun ArNavigationScreen() {
         modelLoader = modelLoader,
         collisionSystem = collisionSystem,
         sessionConfiguration = { session, config ->
-            config.depthMode =
-                when (session.isDepthModeSupported(Config.DepthMode.AUTOMATIC)) {
-                    true -> Config.DepthMode.AUTOMATIC
-                    else -> Config.DepthMode.DISABLED
-                }
+            config.depthMode = when (session.isDepthModeSupported(Config.DepthMode.AUTOMATIC)) {
+                true -> Config.DepthMode.AUTOMATIC
+                else -> Config.DepthMode.DISABLED
+            }
             config.instantPlacementMode = Config.InstantPlacementMode.LOCAL_Y_UP
-            config.lightEstimationMode =
-                Config.LightEstimationMode.ENVIRONMENTAL_HDR
+            config.lightEstimationMode = Config.LightEstimationMode.ENVIRONMENTAL_HDR
 
             // Enable the Geospatial API.
             config.geospatialMode = Config.GeospatialMode.ENABLED
@@ -133,17 +131,11 @@ fun ArNavigationScreen() {
             val yawAccuracy = session.earth?.cameraGeospatialPose?.orientationYawAccuracy ?: DEFAULT_ACCURACY
 
             if (arAccuracyState == ARState.LOCALIZING) {
-                if (horizontalAccuracy <= LOCALIZING_HORIZONTAL_ACCURACY_THRESHOLD_METERS &&
-                    yawAccuracy <= LOCALIZING_ORIENTATION_YAW_ACCURACY_THRESHOLD_DEGREES
-                ) {
+                if (horizontalAccuracy <= LOCALIZING_HORIZONTAL_ACCURACY_THRESHOLD_METERS && yawAccuracy <= LOCALIZING_ORIENTATION_YAW_ACCURACY_THRESHOLD_DEGREES) {
                     arAccuracyState = ARState.LOCALIZED
                 }
             } else if (arAccuracyState == ARState.LOCALIZED) {
-                if (horizontalAccuracy > LOCALIZING_HORIZONTAL_ACCURACY_THRESHOLD_METERS +
-                    LOCALIZED_HORIZONTAL_ACCURACY_HYSTERESIS_METERS ||
-                    yawAccuracy > LOCALIZING_ORIENTATION_YAW_ACCURACY_THRESHOLD_DEGREES +
-                    LOCALIZED_ORIENTATION_YAW_ACCURACY_HYSTERESIS_DEGREES
-                ) {
+                if (horizontalAccuracy > LOCALIZING_HORIZONTAL_ACCURACY_THRESHOLD_METERS + LOCALIZED_HORIZONTAL_ACCURACY_HYSTERESIS_METERS || yawAccuracy > LOCALIZING_ORIENTATION_YAW_ACCURACY_THRESHOLD_DEGREES + LOCALIZED_ORIENTATION_YAW_ACCURACY_HYSTERESIS_DEGREES) {
                     arAccuracyState = ARState.LOCALIZING
                 }
             }
@@ -211,7 +203,6 @@ fun ArNavigationScreen() {
         }
     }
 
-
     if (debugInfo.isNotEmpty()) {
         Box(
             modifier = Modifier
@@ -225,8 +216,7 @@ fun ArNavigationScreen() {
 
     if (arAccuracyState == ARState.LOCALIZING) {
         Box(
-            modifier = Modifier
-                .fillMaxSize()
+            modifier = Modifier.fillMaxSize()
         ) {
             Box(
                 modifier = Modifier
@@ -236,8 +226,7 @@ fun ArNavigationScreen() {
                     .background(color = Color.White.copy(alpha = 0.5f))
             ) {
                 Text(
-                    modifier = Modifier.align(Alignment.Center),
-                    text = "Insufficient accuracy"
+                    modifier = Modifier.align(Alignment.Center), text = "Insufficient accuracy"
                 )
             }
         }
@@ -248,10 +237,9 @@ fun ArNavigationScreen() {
     ) {
         if (childNodes.isEmpty() && arAccuracyState == ARState.LOCALIZED) {
             Spacer(modifier = Modifier.weight(1f))
-            Button(
-                modifier = Modifier
-                    .align(alignment = Alignment.CenterHorizontally)
-                    .padding(16.dp),
+            Button(modifier = Modifier
+                .align(alignment = Alignment.CenterHorizontally)
+                .padding(16.dp),
                 onClick = { shouldCreateAnchor = true }) {
                 Text(text = "Create Anchor")
             }
@@ -293,11 +281,7 @@ fun createAnchorNode(
 
     // Build the cylinder node.
     val cylinderNode = CylinderNode(
-        engine = engine,
-        radius = CYLINDER_RADIUS,
-        height = CYLINDER_HEIGHT,
-        center = center,
-        materialInstance = materialInstance
+        engine = engine, radius = CYLINDER_RADIUS, height = CYLINDER_HEIGHT, center = center, materialInstance = materialInstance
     )
 
     // Attach the cylinder node as a child of the anchor node.
@@ -313,8 +297,7 @@ private fun updateCylinderPosition(
     val cameraPosition = cameraNode.worldPosition
     val assetPosition = anchorNode.worldPosition
     val horizontalDistance = sqrt(
-        (assetPosition.x - cameraPosition.x).pow(2) +
-            (assetPosition.z - cameraPosition.z).pow(2)
+        (assetPosition.x - cameraPosition.x).pow(2) + (assetPosition.z - cameraPosition.z).pow(2)
     )
     val heightAboveFloor = cameraPosition.y - AVERAGE_MAN_PHONE_POSITION
     cylinderNode.worldPosition = if (horizontalDistance > AR_CORE_FAR_PLANE) {
@@ -336,8 +319,7 @@ private fun calculateDistanceToAsset(
     val cameraPosition = cameraNode.worldPosition
     val anchorPosition = anchorNode.worldPosition
     return sqrt(
-        (cameraPosition.x - anchorPosition.x).pow(2) +
-            (cameraPosition.z - anchorPosition.z).pow(2)
+        (cameraPosition.x - anchorPosition.x).pow(2) + (cameraPosition.z - anchorPosition.z).pow(2)
     )
 }
 
@@ -348,20 +330,14 @@ private fun updateRedArrowPosition(
 ) {
     val cameraPose = frame?.camera?.pose ?: return
     val translationPose = Pose.makeTranslation(
-        RED_ARROW_MODEL_X_POSITION,
-        0.0f,
-        RED_ARROW_MODEL_Z_POSITION
+        RED_ARROW_MODEL_X_POSITION, 0.0f, RED_ARROW_MODEL_Z_POSITION
     )
     val modelPose = cameraPose.compose(translationPose)
     redArrowNode.worldPosition = Position(
-        modelPose.tx(),
-        modelPose.ty(),
-        modelPose.tz()
+        modelPose.tx(), modelPose.ty(), modelPose.tz()
     )
     val target = Position(
-        anchorNode.worldPosition.x,
-        redArrowNode.worldPosition.y,
-        anchorNode.worldPosition.z
+        anchorNode.worldPosition.x, redArrowNode.worldPosition.y, anchorNode.worldPosition.z
     )
     redArrowNode.lookAt(target, Vector3.up().toFloat3(), false, 1f)
 }
@@ -378,25 +354,17 @@ private fun handleAnchorCreation(
     if (earth.earthState == Earth.EarthState.ENABLED && earth.trackingState == TrackingState.TRACKING) {
         val earthPose = earth.cameraGeospatialPose
         val anchor = earth.createAnchor(
-            earthPose.latitude,
-            earthPose.longitude,
-            earthPose.altitude,
-            0f,
-            0f,
-            0f,
-            1f
+            earthPose.latitude, earthPose.longitude, earthPose.altitude, 0f, 0f, 0f, 1f
         )
         val anchorNode = createAnchorNode(engine, materialLoader, anchor)
         childNodes.add(anchorNode)
         val modelNode = ModelNode(
-            modelInstance = modelLoader.createModelInstance("models/car_arrow.glb"),
-            scaleToUnits = RED_ARROW_MODEL_INITIAL_SCALE
+            modelInstance = modelLoader.createModelInstance("models/car_arrow.glb"), scaleToUnits = RED_ARROW_MODEL_INITIAL_SCALE
         )
         childNodes.add(modelNode)
     }
 }
 
 enum class ARState {
-    LOCALIZING,
-    LOCALIZED,
+    LOCALIZING, LOCALIZED,
 }
