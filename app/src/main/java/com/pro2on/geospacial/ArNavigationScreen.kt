@@ -179,7 +179,7 @@ fun ArNavigationScreen() {
     )
 
     // Show a distance to the asset
-    if (distanceToAsset > 0 && distanceToAsset > 1) {
+    if (distanceToAsset > 1) {
         val displayDistance = if (useImperialUnits) {
             (distanceToAsset * METERS_TO_FEET).toInt()
         } else {
