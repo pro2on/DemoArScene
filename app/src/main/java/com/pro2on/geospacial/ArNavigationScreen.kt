@@ -1,54 +1,85 @@
 package com.pro2on.geospacial
 
-import android.Manifest
-import android.content.pm.PackageManager
+import android.util.Log
+import androidx.compose.foundation.background
+import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.Button
+import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableFloatStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
+import androidx.compose.runtime.snapshots.SnapshotStateList
+import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
-import androidx.core.content.ContextCompat
+import androidx.compose.ui.unit.dp
 import com.google.android.filament.Engine
 import com.google.ar.core.Anchor
 import com.google.ar.core.Config
+import com.google.ar.core.Earth
 import com.google.ar.core.Frame
 import com.google.ar.core.Pose
+import com.google.ar.core.Session
 import com.google.ar.core.TrackingFailureReason
-import dev.romainguy.kotlin.math.pow
+import com.google.ar.core.TrackingState
 import io.github.sceneview.ar.ARScene
+import io.github.sceneview.ar.node.ARCameraNode
 import io.github.sceneview.ar.node.AnchorNode
 import io.github.sceneview.ar.rememberARCameraNode
+import io.github.sceneview.ar.scene.destroy
 import io.github.sceneview.collision.Vector3
 import io.github.sceneview.loaders.MaterialLoader
+import io.github.sceneview.loaders.ModelLoader
 import io.github.sceneview.math.Position
 import io.github.sceneview.math.toFloat3
 import io.github.sceneview.node.CylinderNode
 import io.github.sceneview.node.ModelNode
+import io.github.sceneview.node.Node
 import io.github.sceneview.rememberCollisionSystem
 import io.github.sceneview.rememberEngine
 import io.github.sceneview.rememberMaterialLoader
 import io.github.sceneview.rememberModelLoader
 import io.github.sceneview.rememberNodes
 import io.github.sceneview.rememberView
-import kotlin.math.cos
-import kotlin.math.sqrt
 import kotlin.math.pow
+import kotlin.math.sqrt
+
+private const val RED_ARROW_MODEL_X_POSITION = 0.4f
+private const val RED_ARROW_MODEL_Z_POSITION = -1.0f
+private const val RED_ARROW_MODEL_INITIAL_SCALE = 0.25f
+private const val AVERAGE_MAN_PHONE_POSITION = 1.5f
+private const val AR_CORE_FAR_PLANE = 30f
+private const val METERS_TO_FEET = 3.28084f
+
+// The thresholds that are required for horizontal and orientation accuracies before entering into
+// the LOCALIZED state. Once the accuracies are equal or less than these values, the app will
+// allow the user to place anchors.
+private const val LOCALIZING_HORIZONTAL_ACCURACY_THRESHOLD_METERS = 10.0
+private const val LOCALIZING_ORIENTATION_YAW_ACCURACY_THRESHOLD_DEGREES = 15.0
+
+// Once in the LOCALIZED state, if either accuracies degrade beyond these amounts, the app will
+// revert back to the LOCALIZING state.
+private const val LOCALIZED_HORIZONTAL_ACCURACY_HYSTERESIS_METERS = 10.0
+private const val LOCALIZED_ORIENTATION_YAW_ACCURACY_HYSTERESIS_DEGREES = 10.0
+
+private const val DEFAULT_ACCURACY = 100.0
 
 @Composable
 fun ArNavigationScreen() {
 
     val context = LocalContext.current
 
-    // The destroy calls are automatically made when their disposable effect leaves
-    // the composition or its key changes.
     val engine = rememberEngine()
     val modelLoader = rememberModelLoader(engine)
     val materialLoader = rememberMaterialLoader(engine)
@@ -56,26 +87,19 @@ fun ArNavigationScreen() {
     val childNodes = rememberNodes()
     val view = rememberView(engine)
     val collisionSystem = rememberCollisionSystem(view)
-
-    var debugText by remember { mutableStateOf("Waiting for AR session update...") }
     var shouldCreateAnchor by remember { mutableStateOf(false) }
-
-    val planeRenderer: Boolean by remember { mutableStateOf(true) }
-
-    var earthState: String by remember { mutableStateOf("Sync...") }
-    var earthTrackingState: String by remember { mutableStateOf("Sync...") }
-
     var trackingFailureReason by remember {
         mutableStateOf<TrackingFailureReason?>(null)
     }
-
-    var anchorAdded by remember { mutableStateOf(false) }
-
-    var assetLatitude by remember { mutableStateOf(0.0) }
-    var assetLongitude by remember { mutableStateOf(0.0) }
-
-
     var frame: Frame? by remember { mutableStateOf<Frame?>(null) }
+    val useImperialUnits: Boolean = remember {
+        val locale = context.resources.configuration.locales[0]
+        locale.country in setOf("US", "LR", "MM")
+    }
+    var arAccuracyState: ARState by remember { mutableStateOf(ARState.LOCALIZING) }
+    var distanceToAsset by remember { mutableFloatStateOf(-1f) }
+    var debugInfo by remember { mutableStateOf("") }
+
     ARScene(
         modifier = Modifier.fillMaxSize(),
         childNodes = childNodes,
@@ -97,149 +121,138 @@ fun ArNavigationScreen() {
             config.geospatialMode = Config.GeospatialMode.ENABLED
         },
         cameraNode = cameraNode,
-        planeRenderer = planeRenderer,
+        planeRenderer = false,
         onTrackingFailureChanged = {
             trackingFailureReason = it
         },
         onSessionUpdated = { session, updatedFrame ->
             frame = updatedFrame
 
-            if (childNodes.isNotEmpty()) {
-                val assetNode = childNodes.firstOrNull { it is AnchorNode } as AnchorNode?
-                if (assetNode != null) {
-                    val cylinderNode = assetNode.childNodes.firstOrNull()
-                    if (cylinderNode != null) {
-                        val cameraPosition = cameraNode.worldPosition
-                        val assetPosition = assetNode.worldPosition
+            // update accuracy
+            val horizontalAccuracy = session.earth?.cameraGeospatialPose?.horizontalAccuracy ?: DEFAULT_ACCURACY
+            val yawAccuracy = session.earth?.cameraGeospatialPose?.orientationYawAccuracy ?: DEFAULT_ACCURACY
 
-                        // Calculate the horizontal distance ignoring y-axis
-                        val horizontalDistance = sqrt(
-                            (assetPosition.x - cameraPosition.x).pow(2) +
-                            (assetPosition.z - cameraPosition.z).pow(2)
-                        )
-
-                        val yposition = cameraPosition.y - 1.5f
-
-                        // Adjust cylinderNode position based on the distance
-                        cylinderNode.worldPosition = if (horizontalDistance > 30f) {
-                            // Pull cylinderNode toward the camera to be exactly 30 meters away
-                            val ratio = 30f / horizontalDistance
-                            Position(
-                                cameraPosition.x + (assetPosition.x - cameraPosition.x) * ratio,
-                                yposition,
-                                cameraPosition.z + (assetPosition.z - cameraPosition.z) * ratio
-                            )
-                        } else {
-                            // Keep cylinderNode at assetNode position (without changing y-position)
-                            Position(assetPosition.x, yposition, assetPosition.z)
-                        }
-                    }
+            if (arAccuracyState == ARState.LOCALIZING) {
+                if (horizontalAccuracy <= LOCALIZING_HORIZONTAL_ACCURACY_THRESHOLD_METERS &&
+                    yawAccuracy <= LOCALIZING_ORIENTATION_YAW_ACCURACY_THRESHOLD_DEGREES
+                ) {
+                    arAccuracyState = ARState.LOCALIZED
                 }
+            } else if (arAccuracyState == ARState.LOCALIZED) {
+                if (horizontalAccuracy > LOCALIZING_HORIZONTAL_ACCURACY_THRESHOLD_METERS +
+                    LOCALIZED_HORIZONTAL_ACCURACY_HYSTERESIS_METERS ||
+                    yawAccuracy > LOCALIZING_ORIENTATION_YAW_ACCURACY_THRESHOLD_DEGREES +
+                    LOCALIZED_ORIENTATION_YAW_ACCURACY_HYSTERESIS_DEGREES
+                ) {
+                    arAccuracyState = ARState.LOCALIZING
+                }
+            }
 
-                val modelNode = childNodes.firstOrNull {it is ModelNode} as ModelNode?
-                if (modelNode != null) {
-                    frame?.camera?.pose?.let { cameraPose ->
-
-                        // Create a pose that represents a translation of 1 meter forward (negative z-direction)
-                        val translationPose = Pose.makeTranslation(0.4f, 0.0f, -1f)
-
-                        // Compose the camera's pose with the translation to get the new model node pose
-                        val modelPose = cameraPose.compose(translationPose)
-
-                        // Update the node's world position using the composed pose's translation components
-                        val newPosition = Position(modelPose.tx(), modelPose.ty(), modelPose.tz())
-                        modelNode.worldPosition = newPosition
-                        
-                        // Compute horizontal direction vector from modelNode to assetNode
-                        if (assetNode != null) {
-                            val modelPosition = modelNode.worldPosition
-                            val assetPosition = assetNode.worldPosition
-                            val target = Position(assetPosition.x, modelPosition.y, assetPosition.z)
-                            modelNode.lookAt(target, Vector3.up().toFloat3(), false, 1f)
-                        }
+            if (arAccuracyState == ARState.LOCALIZING) {
+                // remove empty nodes
+                distanceToAsset = -1f
+                removeAnchors(childNodes)
+            } else if (arAccuracyState == ARState.LOCALIZED) {
+                val anchorNode = childNodes.filterIsInstance<AnchorNode>().firstOrNull()
+                val redArrowNode = childNodes.filterIsInstance<ModelNode>().firstOrNull()
+                if (anchorNode != null && redArrowNode != null) {
+                    updateCylinderPosition(anchorNode, cameraNode)
+                    distanceToAsset = calculateDistanceToAsset(anchorNode, cameraNode)
+                    updateRedArrowPosition(redArrowNode, anchorNode, frame)
+                } else {
+                    distanceToAsset = -1f
+                    if (shouldCreateAnchor) {
+                        shouldCreateAnchor = false
+                        handleAnchorCreation(session, engine, materialLoader, modelLoader, childNodes)
                     }
                 }
             }
 
-            val earth = session.earth
-            if (earth == null) {
-                val hasLocationPermission = ContextCompat.checkSelfPermission(
-                    context,
-                    Manifest.permission.ACCESS_FINE_LOCATION
-                ) == PackageManager.PERMISSION_GRANTED
-
-                debugText =
-                    "Earth is null. Session tracking: ${frame?.camera?.trackingState}.\n" +
-                        "Geospatial mode: ${session.config.geospatialMode}.\n" +
-                        "Location permission granted: $hasLocationPermission.\n" +
-                        "Waiting for sufficient sensor data..."
-                return@ARScene
-            }
-
-            earthTrackingState = "Earth tracking state: ${earth.trackingState}"
-            earthState = "Earth state: ${earth.earthState}"
-
-            val earthPose = earth.cameraGeospatialPose
+            // Update debug info
             val sb = StringBuilder()
-            sb.append("Latitude: ").appendLine(earthPose.latitude)
-            sb.append("Longitude: ").appendLine(earthPose.longitude)
-            sb.append("Altitude: ").appendLine(earthPose.altitude)
-
-            if (assetLatitude != 0.0) {
-                sb.append("Distance: ").appendLine(flatDistance(assetLatitude, assetLongitude, earthPose.latitude, earthPose.longitude))
+            sb.appendLine("Earth is enabled: ${session.earth?.earthState}")
+            sb.appendLine("Tracking state: ${session.earth?.trackingState}")
+            if (trackingFailureReason != null) {
+                sb.appendLine("Tracking failure reason: $trackingFailureReason")
             }
-
-            if (childNodes.isNotEmpty()) {
-                val anchorNode = childNodes.firstOrNull { it is AnchorNode } as AnchorNode?
-                val cameraPosition = cameraNode.worldPosition
-                val anchorPosition = anchorNode?.worldPosition
-                if (anchorPosition != null) {
-                    val horizontalDistanceBetweenCameraAndAnchor = sqrt(pow(cameraPosition.x - anchorPosition.x, 2.0f) + pow(cameraPosition.z - anchorPosition.z, 2.0f))
-                    sb.append("Distance to anchor: ").appendLine(horizontalDistanceBetweenCameraAndAnchor)
-                }
-            }
-
-            debugText = sb.toString()
-
-            // 37.745600, -25.585428
-
-            if (shouldCreateAnchor) {
-                shouldCreateAnchor = false
-
-                assetLatitude = earthPose.latitude
-                assetLongitude = earthPose.longitude
-
-                val anchor = earth.createAnchor(
-                    earthPose.latitude,
-                    earthPose.longitude,
-                    earthPose.altitude,
-                    0f,//earthPose.eastUpSouthQuaternion[0],
-                    0f,//earthPose.eastUpSouthQuaternion[1],
-                    0f,//earthPose.eastUpSouthQuaternion[2],
-                    1f//earthPose.eastUpSouthQuaternion[3]
-                )
-                val node = createAnchorNode(engine, materialLoader, anchor)
-                childNodes.add(node)
-
-                val modelNode = ModelNode(
-                    modelInstance = modelLoader.createModelInstance("models/car_arrow.glb"),
-                    scaleToUnits = 0.25f,
-                )
-
-                childNodes.add(modelNode)
-                anchorAdded = true
-            }
+            sb.appendLine("Horizontal accuracy: ${session.earth?.cameraGeospatialPose?.horizontalAccuracy}")
+            sb.append("Orientation accuracy: ${session.earth?.cameraGeospatialPose?.orientationYawAccuracy}")
+            debugInfo = sb.toString()
+        },
+        onSessionPaused = {
+            distanceToAsset = -1f
+            arAccuracyState = ARState.LOCALIZING
+            removeAnchors(childNodes)
         },
     )
 
+    // Show a distance to the asset
+    if (distanceToAsset > 0 && distanceToAsset > 1) {
+        val displayDistance = if (useImperialUnits) {
+            (distanceToAsset * METERS_TO_FEET).toInt()
+        } else {
+            distanceToAsset.toInt()
+        }
+        val unit = if (useImperialUnits) "ft" else "m"
 
-    Column {
-        Text(text = earthState)
-        Text(text = earthTrackingState)
-        Text(text = debugText)
-        if (!anchorAdded) {
+        Box(modifier = Modifier.fillMaxSize()) {
+            Box(
+                modifier = Modifier
+                    .align(Alignment.BottomCenter)
+                    .padding(16.dp)
+                    .background(Color.Gray.copy(alpha = 0.5f), shape = RoundedCornerShape(4.dp))
+            ) {
+                Text(
+                    modifier = Modifier.padding(horizontal = 16.dp, vertical = 8.dp),
+                    text = "$displayDistance$unit",
+                    style = MaterialTheme.typography.displaySmall,
+                )
+            }
+        }
+    }
+
+
+    if (debugInfo.isNotEmpty()) {
+        Box(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(16.dp)
+                .background(color = Color.White.copy(alpha = 0.5f))
+        ) {
+            Text(text = debugInfo)
+        }
+    }
+
+    if (arAccuracyState == ARState.LOCALIZING) {
+        Box(
+            modifier = Modifier
+                .fillMaxSize()
+        ) {
+            Box(
+                modifier = Modifier
+                    .align(alignment = Alignment.BottomCenter)
+                    .fillMaxWidth()
+                    .padding(16.dp)
+                    .background(color = Color.White.copy(alpha = 0.5f))
+            ) {
+                Text(
+                    modifier = Modifier.align(Alignment.Center),
+                    text = "Insufficient accuracy"
+                )
+            }
+        }
+    }
+
+    Column(
+        modifier = Modifier.fillMaxWidth()
+    ) {
+        if (childNodes.isEmpty() && arAccuracyState == ARState.LOCALIZED) {
             Spacer(modifier = Modifier.weight(1f))
-            Button(onClick = { shouldCreateAnchor = true }) {
+            Button(
+                modifier = Modifier
+                    .align(alignment = Alignment.CenterHorizontally)
+                    .padding(16.dp),
+                onClick = { shouldCreateAnchor = true }) {
                 Text(text = "Create Anchor")
             }
         }
@@ -247,12 +260,23 @@ fun ArNavigationScreen() {
 
 }
 
-/**
- * Creates an AnchorNode that attaches a 1‑km‑tall cylinder.
- *
- * The cylinder is built using CylinderNode with a specified radius and height.
- * To align the cylinder's base at the anchor point, the center is offset upward by half of its height.
- */
+@Suppress("TooGenericExceptionCaught")
+private fun removeAnchors(childNodes: SnapshotStateList<Node>) {
+    childNodes.filterIsInstance<AnchorNode>().forEach { node ->
+        node.anchor.let { anchor ->
+            try {
+                anchor.destroy()
+            } catch (e: Exception) {
+                Log.e("AR", "Error detaching ARCore anchor")
+            }
+        }
+    }
+    childNodes.clear()
+}
+
+private const val CYLINDER_HEIGHT = 30f
+private const val CYLINDER_RADIUS = 0.25f
+
 fun createAnchorNode(
     engine: Engine,
     materialLoader: MaterialLoader,
@@ -261,54 +285,118 @@ fun createAnchorNode(
     // Create the node using the provided ARCore anchor.
     val anchorNode = AnchorNode(engine = engine, anchor = anchor)
 
-    // Define the dimensions of the cylinder.
-    val height = 30.0f    // 1 km tall
-    val radius = 0.25f       // Adjust the radius based on visibility needs
     // Offset the center so that the cylinder's base is at the anchor.
-    val center = Position(0.0f,  height/2f, 0.0f) // это поднимает на уровень земли. Типа поставили его на землю
-//    val center = Position(0.0f,  0.0f, 0.0f)
+    val center = Position(0.0f, CYLINDER_HEIGHT / 2f, 0.0f)
 
     // Create a semi-transparent green material.
     val materialInstance = materialLoader.createColorInstance(Color.Green)
+
     // Build the cylinder node.
     val cylinderNode = CylinderNode(
         engine = engine,
-        radius = radius,
-        height = height,
+        radius = CYLINDER_RADIUS,
+        height = CYLINDER_HEIGHT,
         center = center,
         materialInstance = materialInstance
     )
-    //cylinderNode.worldQuaternion = Quaternion(0f, 0f, 0f, 1f)
-//    val verticalRotation = Quaternion.fromAxisAngle(Float3(0f, 0f, 1f), 0f)
-//    cylinderNode.worldQuaternion = verticalRotation
-
-//    val boxNode = CubeNode(
-//        engine = engine,
-//        size = Size(0.3f),
-//        center = center,
-//        materialInstance = materialInstance
-//    )
 
     // Attach the cylinder node as a child of the anchor node.
     anchorNode.addChildNode(cylinderNode)
-
     return anchorNode
 }
 
+private fun updateCylinderPosition(
+    anchorNode: AnchorNode,
+    cameraNode: ARCameraNode,
+) {
+    val cylinderNode = anchorNode.childNodes.firstOrNull() ?: return
+    val cameraPosition = cameraNode.worldPosition
+    val assetPosition = anchorNode.worldPosition
+    val horizontalDistance = sqrt(
+        (assetPosition.x - cameraPosition.x).pow(2) +
+            (assetPosition.z - cameraPosition.z).pow(2)
+    )
+    val heightAboveFloor = cameraPosition.y - AVERAGE_MAN_PHONE_POSITION
+    cylinderNode.worldPosition = if (horizontalDistance > AR_CORE_FAR_PLANE) {
+        val ratio = AR_CORE_FAR_PLANE / horizontalDistance
+        Position(
+            cameraPosition.x + (assetPosition.x - cameraPosition.x) * ratio,
+            heightAboveFloor,
+            cameraPosition.z + (assetPosition.z - cameraPosition.z) * ratio
+        )
+    } else {
+        Position(assetPosition.x, heightAboveFloor, assetPosition.z)
+    }
+}
 
-fun flatDistance(lat1: Double, lon1: Double, lat2: Double, lon2: Double): Double {
-    // Один градус широты примерно равен 111320 метрам
-    val metersPerDegree = 111320.0
+private fun calculateDistanceToAsset(
+    anchorNode: AnchorNode,
+    cameraNode: ARCameraNode,
+): Float {
+    val cameraPosition = cameraNode.worldPosition
+    val anchorPosition = anchorNode.worldPosition
+    return sqrt(
+        (cameraPosition.x - anchorPosition.x).pow(2) +
+            (cameraPosition.z - anchorPosition.z).pow(2)
+    )
+}
 
-    // Разница широт в метрах
-    val dLat = (lat2 - lat1) * metersPerDegree
+private fun updateRedArrowPosition(
+    redArrowNode: ModelNode,
+    anchorNode: AnchorNode,
+    frame: Frame?,
+) {
+    val cameraPose = frame?.camera?.pose ?: return
+    val translationPose = Pose.makeTranslation(
+        RED_ARROW_MODEL_X_POSITION,
+        0.0f,
+        RED_ARROW_MODEL_Z_POSITION
+    )
+    val modelPose = cameraPose.compose(translationPose)
+    redArrowNode.worldPosition = Position(
+        modelPose.tx(),
+        modelPose.ty(),
+        modelPose.tz()
+    )
+    val target = Position(
+        anchorNode.worldPosition.x,
+        redArrowNode.worldPosition.y,
+        anchorNode.worldPosition.z
+    )
+    redArrowNode.lookAt(target, Vector3.up().toFloat3(), false, 1f)
+}
 
-    // Вычисляем среднюю широту и переводим в радианы
-    val avgLat = Math.toRadians((lat1 + lat2) / 2)
+@Suppress("LongParameterList")
+private fun handleAnchorCreation(
+    session: Session,
+    engine: Engine,
+    materialLoader: MaterialLoader,
+    modelLoader: ModelLoader,
+    childNodes: MutableList<Node>,
+) {
+    val earth = session.earth ?: return
+    if (earth.earthState == Earth.EarthState.ENABLED && earth.trackingState == TrackingState.TRACKING) {
+        val earthPose = earth.cameraGeospatialPose
+        val anchor = earth.createAnchor(
+            earthPose.latitude,
+            earthPose.longitude,
+            earthPose.altitude,
+            0f,
+            0f,
+            0f,
+            1f
+        )
+        val anchorNode = createAnchorNode(engine, materialLoader, anchor)
+        childNodes.add(anchorNode)
+        val modelNode = ModelNode(
+            modelInstance = modelLoader.createModelInstance("models/car_arrow.glb"),
+            scaleToUnits = RED_ARROW_MODEL_INITIAL_SCALE
+        )
+        childNodes.add(modelNode)
+    }
+}
 
-    // Разница долгот в метрах с учетом косинуса средней широты
-    val dLon = (lon2 - lon1) * metersPerDegree * cos(avgLat)
-
-    // Расстояние по теореме Пифагора
-    return sqrt(dLat * dLat + dLon * dLon)
+enum class ARState {
+    LOCALIZING,
+    LOCALIZED,
 }
